@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flocking Simulation Project</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #f0f8ff; /* Light blue background */
+    }
+
+    .slideshow {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .slide {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+      color: #333;
+      padding: 20px;
+    }
+
+    .slide.active {
+      opacity: 1;
+    }
+
+    h1, h2 {
+      color: #8dc63c; /* Pastel green accent color */
+    }
+
+    .chart-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 80%;
+      margin: 20px auto;
+    }
+
+    .chart {
+      flex: 1;
+      margin: 10px;
+      border: 1px solid #8dc63c; /* Pastel green border */
+      border-radius: 5px;
+      padding: 10px;
+      background-color: #fff;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .arrow {
+      position: absolute;
+      bottom: 20px;
+      width: 50px;
+      height: 50px;
+      background-color: #fff;
+      border: 2px solid #8dc63c; /* Pastel green border */
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .arrow svg {
+      width: 20px;
+      height: 20px;
+      fill: #8dc63c; /* Pastel green fill */
+    }
+
+    .arrow-left {
+      left: 45%;
+    }
+
+    .arrow-right {
+      right: 45%;
+    }
+
+    #simulation-container {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="slideshow">
+    <div class="slide active" id="slide1">
+      <h1>Flocking Simulation Project</h1>
+      <p>Exploring emergent behavior through a flocking simulation.</p>
+      <div class="chart-container">
+        <div class="chart">
+          <h3>Impact of Parameters</h3>
+          <p>Graph showing how different parameters affect flocking behavior.</p>
+        </div>
+        <div class="chart">
+          <h3>Boid Distribution</h3>
+          <p>Chart illustrating the distribution of boids in the simulation.</p>
+        </div>
+      </div>
+    </div>
+    <div class="slide" id="slide2">
+      <h2>Use Cases and Applications</h2>
+      <p>Understanding flocking behavior can be applied to various fields such as biology, robotics, and AI.</p>
+      <div class="chart-container">
+        <div class="chart">
+          <h3>Biological Systems</h3>
+          <p>Examples of flocking behavior in nature.</p>
+        </div>
+        <div class="chart">
+          <h3>Robotics</h3>
+          <p>Applications in swarm robotics and autonomous systems.</p>
+        </div>
+      </div>
+    </div>
+    <div class="slide" id="slide3">
+      <h2>Technologies Used</h2>
+      <p>This project uses HTML, CSS, JavaScript, and the p5.js library to create an interactive simulation.</p>
+      <div class="chart-container">
+        <div class="chart">
+          <h3>HTML & CSS</h3>
+          <p>Structuring and styling the webpage.</p>
+        </div>
+        <div class="chart">
+          <h3>JavaScript & p5.js</h3>
+          <p>Creating the interactive simulation.</p>
+        </div>
+      </div>
+    </div>
+    <div class="slide" id="slide4">
+      <h2>The Team</h2>
+      <p>Introducing the team members who contributed to this project.</p>
+      <div class="chart-container">
+        <div class="chart">
+          <h3>Team Member 1</h3>
+          <p>Role and contributions.</p>
+        </div>
+        <div class="chart">
+          <h3>Team Member 2</h3>
+          <p>Role and contributions.</p>
+        </div>
+      </div>
+    </div>
+    <div class="slide" id="slide5">
+      <h2>Demo</h2>
+      <div id="simulation-container"></div>
+    </div>
+    <div class="arrow arrow-left" onclick="prevSlide()">
+      <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L9.83 12z"></path></svg>
+    </div>
+    <div class="arrow arrow-right" onclick="nextSlide()">
+      <svg viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"></path></svg>
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+
+    function showSlide(index) {
+      slides[currentSlide].classList.remove('active');
+      currentSlide = (index + totalSlides) % totalSlides;
+      slides[currentSlide].classList.add('active');
+    }
+
+    function nextSlide() {
+      showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      showSlide(currentSlide - 1);
+    }
+
+    let boids = [];
+    let sliderCount, sliderSpeed, sliderSeparation, sliderCohesion, sliderAlignment;
+    let colorPicker;
+
+    function setup() {
+      let canvas = createCanvas(windowWidth, windowHeight);
+      canvas.parent('simulation-container');
+
+      createP('Number of Boids:').position(20, 10);
+      sliderCount = createSlider(10, 200, 50, 1);
+      sliderCount.position(150, 20);
+
+      createP('Speed:').position(20, 40);
+      sliderSpeed = createSlider(1, 10, 5, 0.1);
+      sliderSpeed.position(150, 50);
+
+      createP('Separation:').position(20, 70);
+      sliderSeparation = createSlider(0, 10, 2.5, 0.1);
+      sliderSeparation.position(150, 80);
+
+      createP('Cohesion:').position(20, 100);
+      sliderCohesion = createSlider(0, 5, 1.0, 0.1);
+      sliderCohesion.position(150, 110);
+
+      createP('Alignment:').position(20, 130);
+      sliderAlignment = createSlider(0, 5, 1.0, 0.1);
+      sliderAlignment.position(150, 140);
+
+      createP('Boid Color:').position(20, 160);
+      colorPicker = createColorPicker('#ffffff');
+      colorPicker.position(150, 170);
+
+      for (let i = 0; i < sliderCount.value(); i++) {
+        boids.push(new Boid());
+      }
+    }
+
+    function draw() {
+      background(220);
+
+      let count = sliderCount.value();
+      let speed = sliderSpeed.value();
+      let separationWeight = sliderSeparation.value();
+      let cohesionWeight = sliderCohesion.value();
+      let alignmentWeight = sliderAlignment.value();
+
+      if (boids.length < count) {
+        for (let i = boids.length; i < count; i++) {
+          boids.push(new Boid());
+        }
+      } else if (boids.length > count) {
+        boids.splice(count);
+      }
+
+      for (let boid of boids) {
+        boid.update(boids, speed, separationWeight, cohesionWeight, alignmentWeight);
+        boid.show();
+      }
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+    }
+
+    class Boid {
+      constructor() {
+        this.position = createVector(random(width), random(height));
+        this.velocity = p5.Vector.random2D();
+        this.acceleration = createVector(0, 0);
+        this.maxSpeed = sliderSpeed.value();
+        this.maxForce = 0.03;
+      }
+
+      update(boids, speed, separationWeight, cohesionWeight, alignmentWeight) {
+        this.maxSpeed = speed;
+
+        let separation = this.separate(boids).mult(separationWeight);
+        let alignment = this.align(boids).mult(alignmentWeight);
+        let cohesion = this.cohesion(boids).mult(cohesionWeight);
+
+        this.applyForce(separation);
+        this.applyForce(alignment);
+        this.applyForce(cohesion);
+
+        this.updatePosition();
+        this.wrapEdges();
+      }
+
+      applyForce(force) {
+        this.acceleration.add(force);
+      }
+
+      updatePosition() {
+        this.velocity.add(this.acceleration);
+        this.velocity.limit(this.maxSpeed);
+        this.position.add(this.velocity);
+        this.acceleration.mult(0);
+      }
+
+      wrapEdges() {
+        if (this.position.x > width) this.position.x = 0;
+        if (this.position.x < 0) this.position.x = width;
+        if (this.position.y > height) this.position.y = 0;
+        if (this.position.y < 0) this.position.y = height;
+      }
+
+      separate(boids) {
+        let desiredSeparation = 25.0;
+        let steer = createVector(0, 0);
+        let total = 0;
+        for (let other of boids) {
+          let d = this.position.dist(other.position);
+          if (other !== this && d < desiredSeparation) {
+            let diff = p5.Vector.sub(this.position, other.position);
+            diff.div(d);
+            steer.add(diff);
+            total++;
+          }
+        }
+        if (total > 0) {
+          steer.div(total);
+          steer.setMag(this.maxSpeed);
+          steer.sub(this.velocity);
+          steer.limit(this.maxForce);
+        }
+        return steer;
+      }
+
+      align(boids) {
+        let sum = createVector(0, 0);
+        let total = 0;
+        let perceptionRadius = 50;
+        for (let other of boids) {
+          let d = this.position.dist(other.position);
+          if (other !== this && d < perceptionRadius) {
+            sum.add(other.velocity);
+            total++;
+          }
+        }
+        if (total > 0) {
+          sum.div(total);
+          sum.setMag(this.maxSpeed);
+          let steer = p5.Vector.sub(sum, this.velocity);
+          steer.limit(this.maxForce);
+          return steer;
+        } else {
+          return createVector(0, 0);
+        }
+      }
+
+      cohesion(boids) {
+        let sum = createVector(0, 0);
+        let total = 0;
+        let perceptionRadius = 50;
+        for (let other of boids) {
+          let d = this.position.dist(other.position);
+          if (other !== this && d < perceptionRadius) {
+            sum.add(other.position);
+            total++;
+          }
+        }
+        if (total > 0) {
+          sum.div(total);
+          return this.seek(sum);
+        } else {
+          return createVector(0, 0);
+        }
+      }
+
+      seek(target) {
+        let desired = p5.Vector.sub(target, this.position);
+        desired.setMag(this.maxSpeed);
+        let steer = p5.Vector.sub(desired, this.velocity);
+        steer.limit(this.maxForce);
+        return steer;
+      }
+
+      show() {
+        let angle = this.velocity.heading();
+        stroke(0);
+        strokeWeight(1);
+        fill(colorPicker.color());
+        push();
+        translate(this.position.x, this.position.y);
+        rotate(angle);
+        beginShape();
+        vertex(0, -5);
+        vertex(-5, 5);
+        vertex(5, 5);
+        endShape(CLOSE);
+        pop();
+      }
+    }
+  </script>
+</body>
+</html>
