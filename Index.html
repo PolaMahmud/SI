@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flock Simulation with Mobile Responsive Minimap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body { margin: 0; }
+    /* Default (desktop) layout: simulation on left 70%, controls on right 30% */
+    #container {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #simulation {
+      width: 70%;
+      position: relative;
+    }
+    #controls {
+      width: 30%;
+      background-color: #f0f0f0;
+      padding: 20px;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+    .slider-group {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .slider-group .label {
+      width: 150px;
+      margin-right: 10px;
+    }
+    #minimapContainer {
+      margin-top: 20px;
+      text-align: center;
+    }
+    #minimapContainer canvas {
+      border: 1px solid #888;
+    }
+    /* Mobile layout: stack simulation on top and controls on bottom */
+    @media screen and (max-width: 768px) {
+      #container {
+        flex-direction: column;
+      }
+      #simulation {
+        width: 100%;
+        height: 50vh;
+      }
+      #controls {
+        width: 100%;
+        height: 50vh;
+        overflow-y: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <!-- Main simulation canvas -->
+    <div id="simulation"></div>
+    <!-- UI controls and minimap container -->
+    <div id="controls"></div>
+  </div>
+
+  <!-- Main Sketch (Global Mode) -->
+  <script>
+    // Global variables and UI controls
+    let boids = [];
+    let sliderCount, sliderSpeed, sliderSeparation, sliderCohesion, sliderAlignment, sliderPerception;
+    let spanCount, spanSpeed, spanSeparation, spanCohesion, spanAlignment, spanPerception;
+    let colorPickerBoid, colorPickerPerception, colorPickerBackground;
+    let sliderPerceptionOpacity, spanPerceptionOpacity;
+    
+    function setup() {
+      // Create main simulation canvas inside #simulation.
+      // In desktop mode: 70% of window width x full height.
+      // In mobile: full width x 50% of viewport height.
+      let simDiv = document.getElementById("simulation");
+      let simWidth = windowWidth;
+      let simHeight = windowHeight;
+      if(windowWidth < 768) {
+        simWidth = windowWidth;
+        simHeight = windowHeight * 0.5;
+      } else {
+        simWidth = windowWidth * 0.7;
+        simHeight = windowHeight;
+      }
+      let canvas = createCanvas(simWidth, simHeight);
+      canvas.parent(simDiv);
+      
+      // Get controls container
+      let controlsDiv = document.getElementById("controls");
+      
+      // --- UI Controls ---
+      
+      // Number of Boids
+      let groupCount = createDiv().addClass("slider-group");
+      groupCount.parent(controlsDiv);
+      let labelCount = createSpan("Number of Boids: ").addClass("label");
+      labelCount.parent(groupCount);
+      sliderCount = createSlider(3, 300, 50, 1);
+      sliderCount.parent(groupCount);
+      spanCount = createSpan(sliderCount.value());
+      spanCount.parent(groupCount);
+      sliderCount.input(() => spanCount.html(sliderCount.value()));
+      
+      // Desired Speed
+      let groupSpeed = createDiv().addClass("slider-group");
+      groupSpeed.parent(controlsDiv);
+      let labelSpeed = createSpan("Desired Speed: ").addClass("label");
+      labelSpeed.parent(groupSpeed);
+      sliderSpeed = createSlider(1, 15, 7, 0.1);
+      sliderSpeed.parent(groupSpeed);
+      spanSpeed = createSpan(sliderSpeed.value());
+      spanSpeed.parent(groupSpeed);
+      sliderSpeed.input(() => spanSpeed.html(sliderSpeed.value()));
+      
+      // Separation
+      let groupSeparation = createDiv().addClass("slider-group");
+      groupSeparation.parent(controlsDiv);
+      let labelSeparation = createSpan("Separation: ").addClass("label");
+      labelSeparation.parent(groupSeparation);
+      sliderSeparation = createSlider(0, 5, 1.5, 0.1);
+      sliderSeparation.parent(groupSeparation);
+      spanSeparation = createSpan(sliderSeparation.value());
+      spanSeparation.parent(groupSeparation);
+      sliderSeparation.input(() => spanSeparation.html(sliderSeparation.value()));
+      
+      // Cohesion
+      let groupCohesion = createDiv().addClass("slider-group");
+      groupCohesion.parent(controlsDiv);
+      let labelCohesion = createSpan("Cohesion: ").addClass("label");
+      labelCohesion.parent(groupCohesion);
+      sliderCohesion = createSlider(0, 5, 1.0, 0.1);
+      sliderCohesion.parent(groupCohesion);
+      spanCohesion = createSpan(sliderCohesion.value());
+      spanCohesion.parent(groupCohesion);
+      sliderCohesion.input(() => spanCohesion.html(sliderCohesion.value()));
+      
+      // Alignment
+      let groupAlignment = createDiv().addClass("slider-group");
+      groupAlignment.parent(controlsDiv);
+      let labelAlignment = createSpan("Alignment: ").addClass("label");
+      labelAlignment.parent(groupAlignment);
+      sliderAlignment = createSlider(0, 5, 1.0, 0.1);
+      sliderAlignment.parent(groupAlignment);
+      spanAlignment = createSpan(sliderAlignment.value());
+      spanAlignment.parent(groupAlignment);
+      sliderAlignment.input(() => spanAlignment.html(sliderAlignment.value()));
+      
+      // Perception Radius
+      let groupPerception = createDiv().addClass("slider-group");
+      groupPerception.parent(controlsDiv);
+      let labelPerception = createSpan("Perception: ").addClass("label");
+      labelPerception.parent(groupPerception);
+      sliderPerception = createSlider(10, 200, 50, 1);
+      sliderPerception.parent(groupPerception);
+      spanPerception = createSpan(sliderPerception.value());
+      spanPerception.parent(groupPerception);
+      sliderPerception.input(() => spanPerception.html(sliderPerception.value()));
+      
+      // Perception Opacity
+      let groupPerceptionOpacity = createDiv().addClass("slider-group");
+      groupPerceptionOpacity.parent(controlsDiv);
+      let labelPerceptionOpacity = createSpan("Perception Opacity: ").addClass("label");
+      labelPerceptionOpacity.parent(groupPerceptionOpacity);
+      sliderPerceptionOpacity = createSlider(0, 255, 50, 1);
+      sliderPerceptionOpacity.parent(groupPerceptionOpacity);
+      spanPerceptionOpacity = createSpan(sliderPerceptionOpacity.value());
+      spanPerceptionOpacity.parent(groupPerceptionOpacity);
+      sliderPerceptionOpacity.input(() => spanPerceptionOpacity.html(sliderPerceptionOpacity.value()));
+      
+      // Boid Color
+      let groupBoidColor = createDiv().addClass("slider-group");
+      groupBoidColor.parent(controlsDiv);
+      let labelBoidColor = createSpan("Boid Color: ").addClass("label");
+      labelBoidColor.parent(groupBoidColor);
+      colorPickerBoid = createColorPicker("#000000");
+      colorPickerBoid.parent(groupBoidColor);
+      
+      // Perception Field Color
+      let groupPerceptionColor = createDiv().addClass("slider-group");
+      groupPerceptionColor.parent(controlsDiv);
+      let labelPerceptionColor = createSpan("Perception Color: ").addClass("label");
+      labelPerceptionColor.parent(groupPerceptionColor);
+      colorPickerPerception = createColorPicker("#6495ED");
+      colorPickerPerception.parent(groupPerceptionColor);
+      
+      // Background Color
+      let groupBackground = createDiv().addClass("slider-group");
+      groupBackground.parent(controlsDiv);
+      let labelBackground = createSpan("Background Color: ").addClass("label");
+      labelBackground.parent(groupBackground);
+      colorPickerBackground = createColorPicker("#DCDCDC");
+      colorPickerBackground.parent(groupBackground);
+      
+      // --- Minimap Container ---
+      let miniContainer = createDiv();
+      miniContainer.id("minimapContainer");
+      miniContainer.parent(controlsDiv);
+      
+      // Initialize boids based on sliderCount
+      for (let i = 0; i < sliderCount.value(); i++) {
+        boids.push(new Boid());
+      }
+    }
+    
+    function draw() {
+      background(colorPickerBackground.value());
+      
+      let count = sliderCount.value();
+      let desiredSpeed = sliderSpeed.value();
+      let separationWeight = sliderSeparation.value();
+      let cohesionWeight = sliderCohesion.value();
+      let alignmentWeight = sliderAlignment.value();
+      
+      // Adjust boid count if slider changes
+      if (boids.length < count) {
+        for (let i = boids.length; i < count; i++) {
+          boids.push(new Boid());
+        }
+      } else if (boids.length > count) {
+        boids.splice(count);
+      }
+      
+      // Update and display each boid on main canvas
+      for (let b of boids) {
+        b.update(boids, desiredSpeed, separationWeight, cohesionWeight, alignmentWeight);
+        b.show();
+      }
+    }
+    
+    function windowResized() {
+      let simDiv = document.getElementById("simulation");
+      let newWidth, newHeight;
+      if(windowWidth < 768) {
+        newWidth = windowWidth;
+        newHeight = windowHeight * 0.5;
+      } else {
+        newWidth = windowWidth * 0.7;
+        newHeight = windowHeight;
+      }
+      resizeCanvas(newWidth, newHeight);
+    }
+    
+    class Boid {
+      constructor() {
+        this.position = createVector(random(width), random(height));
+        this.velocity = p5.Vector.random2D();
+        this.velocity.setMag(sliderSpeed.value());
+        this.acceleration = createVector(0, 0);
+        this.maxForce = 0.03;
+      }
+      
+      update(boids, desiredSpeed, separationWeight, cohesionWeight, alignmentWeight) {
+        let separation = this.separate(boids).mult(separationWeight);
+        let alignment = this.align(boids, desiredSpeed).mult(alignmentWeight);
+        let cohesion = this.cohesion(boids, desiredSpeed).mult(cohesionWeight);
+        
+        this.applyForce(separation);
+        this.applyForce(alignment);
+        this.applyForce(cohesion);
+        
+        this.velocity.add(this.acceleration);
+        if (this.velocity.mag() !== 0) {
+          this.velocity.setMag(lerp(this.velocity.mag(), desiredSpeed, 0.05));
+        }
+        this.position.add(this.velocity);
+        this.acceleration.mult(0);
+        this.wrapEdges();
+      }
+      
+      applyForce(force) {
+        this.acceleration.add(force);
+      }
+      
+      wrapEdges() {
+        if (this.position.x > width) this.position.x = 0;
+        if (this.position.x < 0) this.position.x = width;
+        if (this.position.y > height) this.position.y = 0;
+        if (this.position.y < 0) this.position.y = height;
+      }
+      
+      separate(boids) {
+        let desiredSeparation = 25.0;
+        let steer = createVector(0, 0);
+        let total = 0;
+        for (let other of boids) {
+          let d = this.position.dist(other.position);
+          if (other !== this && d < desiredSeparation) {
+            let diff = p5.Vector.sub(this.position, other.position);
+            diff.div(d);
+            steer.add(diff);
+            total++;
+          }
+        }
+        if (total > 0) {
+          steer.div(total);
+          steer.setMag(sliderSpeed.value());
+          steer.sub(this.velocity);
+          steer.limit(this.maxForce);
+        }
+        return steer;
+      }
+      
+      align(boids, desiredSpeed) {
+        let perceptionRadius = sliderPerception.value();
+        let sum = createVector(0, 0);
+        let total = 0;
+        for (let other of boids) {
+          let d = this.position.dist(other.position);
+          if (other !== this && d < perceptionRadius) {
+            sum.add(other.velocity);
+            total++;
+          }
+        }
+        if (total > 0) {
+          sum.div(total);
+          sum.setMag(desiredSpeed);
+          let steer = p5.Vector.sub(sum, this.velocity);
+          steer.limit(this.maxForce);
+          return steer;
+        } else {
+          return createVector(0, 0);
+        }
+      }
+      
+      cohesion(boids, desiredSpeed) {
+        let perceptionRadius = sliderPerception.value();
+        let sum = createVector(0, 0);
+        let total = 0;
+        for (let other of boids) {
+          let d = this.position.dist(other.position);
+          if (other !== this && d < perceptionRadius) {
+            sum.add(other.position);
+            total++;
+          }
+        }
+        if (total > 0) {
+          sum.div(total);
+          return this.seek(sum, desiredSpeed);
+        } else {
+          return createVector(0, 0);
+        }
+      }
+      
+      seek(target, desiredSpeed) {
+        let desired = p5.Vector.sub(target, this.position);
+        desired.setMag(desiredSpeed);
+        let steer = p5.Vector.sub(desired, this.velocity);
+        steer.limit(this.maxForce);
+        return steer;
+      }
+      
+      show() {
+        // Draw perception overlay for this boid
+        noStroke();
+        let percCol = color(colorPickerPerception.value());
+        percCol.setAlpha(sliderPerceptionOpacity.value());
+        fill(percCol);
+        ellipse(this.position.x, this.position.y, sliderPerception.value() * 2);
+        
+        // Then draw the boid on top
+        stroke(colorPickerBoid.value());
+        strokeWeight(4);
+        point(this.position.x, this.position.y);
+      }
+    }
+  </script>
+  
+  <!-- Minimap Sketch (Instance Mode) -->
+  <script>
+    const minimapSketch = (m) => {
+      const MINIMAP_W = 300;
+      const MINIMAP_H = 300;
+      m.setup = () => {
+        let c2 = m.createCanvas(MINIMAP_W, MINIMAP_H);
+        c2.parent("minimapContainer");
+      };
+      
+      m.draw = () => {
+        // Use the same background color as main simulation
+        m.background(colorPickerBackground.value());
+        if (boids.length > 0) {
+          let focus = boids[0];
+          // Use perception radius to determine zoom so that the entire circle fits
+          let r = float(sliderPerception.value());
+          let zoom = m.min(MINIMAP_W, MINIMAP_H) / (2 * r);
+          
+          m.push();
+          m.translate(MINIMAP_W / 2, MINIMAP_H / 2);
+          m.scale(zoom);
+          m.translate(-focus.position.x, -focus.position.y);
+          
+          // First pass: Draw perception overlays for all boids within focus's perception field
+          for (let b of boids) {
+            let d = m.dist(b.position.x, b.position.y, focus.position.x, focus.position.y);
+            if (d <= r) {
+              let overlay = m.color(colorPickerPerception.value());
+              overlay.setAlpha(sliderPerceptionOpacity.value());
+              m.noStroke();
+              m.fill(overlay);
+              m.ellipse(b.position.x, b.position.y, sliderPerception.value() * 2);
+            }
+          }
+          
+          // Second pass: Draw boids on top of overlays
+          for (let b of boids) {
+            let d = m.dist(b.position.x, b.position.y, focus.position.x, focus.position.y);
+            if (d <= r) {
+              m.noStroke();
+              m.fill(colorPickerBoid.value());
+              m.circle(b.position.x, b.position.y, 6);
+            }
+          }
+          
+          // Optionally, draw the focus boid's perception outline
+          m.noFill();
+          m.stroke(colorPickerPerception.value());
+          m.strokeWeight(2 / zoom);
+          m.circle(focus.position.x, focus.position.y, 2 * r);
+          
+          // Draw the focus boid itself with a thicker stroke
+          m.stroke(colorPickerBoid.value());
+          m.strokeWeight(4 / zoom);
+          m.point(focus.position.x, focus.position.y);
+          
+          m.pop();
+        }
+      };
+      
+      m.mousePressed = () => {
+        console.log("Minimap clicked at", m.mouseX, m.mouseY);
+      };
+    };
+    
+    let miniP5 = new p5(minimapSketch);
+  </script>
+</body>
+</html>
